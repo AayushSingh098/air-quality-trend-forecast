@@ -9,6 +9,14 @@ The project integrates multiple real-world data sources, compares several machin
 [![SHAP](https://img.shields.io/badge/Explainability-SHAP-blueviolet)](https://shap.readthedocs.io/)
 [![Streamlit](https://img.shields.io/badge/Streamlit-Dashboard-FF4B4B)](https://streamlit.io/)
 
+### 🌐 Live Demo
+[Open the Live Dashboard](https://delhi-air-quality-forecast.streamlit.app/)
+
+## 📊 Dashboard Preview
+
+![Main Dashboard](assets_dashboard.png)
+
+![Analytics Dashboard](assets_analytics.png)
 ---
 
 ## 🎯 Project Objective
