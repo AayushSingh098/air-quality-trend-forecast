@@ -151,7 +151,7 @@ Before generating a live forecast, it checks the **age of the latest PM2.5 obser
 **1. Clone the repository**
 
 ```bash
-git clone <your-repository-url>
+git clone https://github.com/AayushSingh098/air-quality-trend-forecast.git
 cd "Air Quality Trend & Forecast"
 ```
 
