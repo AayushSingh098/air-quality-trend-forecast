@@ -3,14 +3,36 @@ import os
 from pathlib import Path
 
 import joblib
+import pandas as pd
 import requests
 from dotenv import load_dotenv
-import pandas as pd
+
 
 project_root = Path(__file__).resolve().parent.parent
+
+# Load local environment variables
 load_dotenv(project_root / ".env")
 
 OPENAQ_API_KEY = os.getenv("OPENAQ_API_KEY")
+NASA_FIRMS_MAP_KEY = os.getenv("NASA_FIRMS_MAP_KEY")
+
+# Use Streamlit secrets when deployed
+try:
+    import streamlit as st
+
+    OPENAQ_API_KEY = st.secrets.get(
+        "OPENAQ_API_KEY",
+        OPENAQ_API_KEY
+    )
+
+    NASA_FIRMS_MAP_KEY = st.secrets.get(
+        "NASA_FIRMS_MAP_KEY",
+        NASA_FIRMS_MAP_KEY
+    )
+except Exception:
+    pass
+
+
 BASE_URL = "https://api.openaq.org/v3"
 
 headers = {
@@ -48,7 +70,8 @@ def get_latest_pm25():
         "date": latest["datetime"]["local"]
     }
 
-# Get today's weather and tomorrow's weather for Delhi
+
+# Get today's and tomorrow's weather for Delhi
 def get_weather():
     url = "https://api.open-meteo.com/v1/forecast"
 
@@ -65,7 +88,12 @@ def get_weather():
         "forecast_days": 2
     }
 
-    response = requests.get(url, params=params, timeout=30)
+    response = requests.get(
+        url,
+        params=params,
+        timeout=30
+    )
+
     response.raise_for_status()
 
     daily = response.json()["daily"]
@@ -87,23 +115,31 @@ def get_weather():
         }
     }
 
+
 # Get recent regional fire activity from NASA FIRMS
 def get_recent_fire_activity():
     import io
-    import pandas as pd
 
-    nasa_key = os.getenv("NASA_FIRMS_MAP_KEY")
+    if not NASA_FIRMS_MAP_KEY:
+        raise ValueError("NASA FIRMS API key is missing.")
+
     fire_area = "73,26,80,32"
 
     url = (
         "https://firms.modaps.eosdis.nasa.gov/api/area/csv/"
-        f"{nasa_key}/VIIRS_NOAA20_NRT/{fire_area}/1"
+        f"{NASA_FIRMS_MAP_KEY}/VIIRS_NOAA20_NRT/{fire_area}/1"
     )
 
-    response = requests.get(url, timeout=30)
+    response = requests.get(
+        url,
+        timeout=30
+    )
+
     response.raise_for_status()
 
-    fire_df = pd.read_csv(io.StringIO(response.text))
+    fire_df = pd.read_csv(
+        io.StringIO(response.text)
+    )
 
     if fire_df.empty:
         return {
@@ -114,9 +150,10 @@ def get_recent_fire_activity():
 
     return {
         "fire_count": len(fire_df),
-        "total_frp": fire_df["frp"].sum(),
-        "mean_frp": fire_df["frp"].mean()
+        "total_frp": float(fire_df["frp"].sum()),
+        "mean_frp": float(fire_df["frp"].mean())
     }
+
 
 # Build the features needed for tomorrow's prediction
 def build_live_features():
@@ -124,13 +161,28 @@ def build_live_features():
     weather = get_weather()
     fire = get_recent_fire_activity()
 
-    history_path = project_root / "data" / "processed" / "model_data.csv"
+    history_path = (
+        project_root
+        / "data"
+        / "processed"
+        / "model_data.csv"
+    )
+
     history = pd.read_csv(history_path)
 
     history["date"] = pd.to_datetime(history["date"])
-    history = history.dropna(subset=["pm25"]).sort_values("date")
 
-    latest_date = pd.to_datetime(pm25_data["date"]).tz_localize(None)
+    history = (
+        history
+        .dropna(subset=["pm25"])
+        .sort_values("date")
+    )
+
+    latest_date = (
+        pd.to_datetime(pm25_data["date"])
+        .tz_localize(None)
+    )
+
     current_pm25 = pm25_data["pm25"]
 
     recent_pm25 = history[
@@ -139,7 +191,9 @@ def build_live_features():
 
     recent_pm25.append(current_pm25)
 
-    forecast_date = pd.to_datetime(weather["tomorrow"]["date"])
+    forecast_date = pd.to_datetime(
+        weather["tomorrow"]["date"]
+    )
 
     features = {
         "pm25": current_pm25,
@@ -148,8 +202,8 @@ def build_live_features():
         "rainfall": weather["tomorrow"]["rainfall"],
         "wind_speed": weather["tomorrow"]["wind_speed"],
         "fire_count": fire["fire_count"],
-        "total_frp": float(fire["total_frp"]),
-        "mean_frp": float(fire["mean_frp"]),
+        "total_frp": fire["total_frp"],
+        "mean_frp": fire["mean_frp"],
         "month": forecast_date.month,
         "day_of_year": forecast_date.dayofyear,
         "pm25_lag_1": recent_pm25[-2],
@@ -162,14 +216,24 @@ def build_live_features():
 
     return pd.DataFrame([features])
 
+
 # Check how old the latest PM2.5 reading is
 def check_pm25_freshness():
     pm25_data = get_latest_pm25()
 
-    latest_date = pd.to_datetime(pm25_data["date"]).tz_localize(None)
-    today = pd.Timestamp.now(tz="Asia/Kolkata").tz_localize(None)
+    latest_date = (
+        pd.to_datetime(pm25_data["date"])
+        .tz_localize(None)
+    )
 
-    age_hours = (today - latest_date).total_seconds() / 3600
+    now = (
+        pd.Timestamp.now(tz="Asia/Kolkata")
+        .tz_localize(None)
+    )
+
+    age_hours = (
+        now - latest_date
+    ).total_seconds() / 3600
 
     return {
         "latest_date": latest_date,
@@ -177,7 +241,8 @@ def check_pm25_freshness():
         "is_fresh": age_hours <= 48
     }
 
-# Make tomorrow's prediction when the PM2.5 data is fresh
+
+# Make tomorrow's prediction when PM2.5 data is fresh
 def get_live_prediction():
     freshness = check_pm25_freshness()
 
@@ -191,7 +256,12 @@ def get_live_prediction():
 
     features = build_live_features()
 
-    model_path = project_root / "models" / "air_quality_model.pkl"
+    model_path = (
+        project_root
+        / "models"
+        / "air_quality_model.pkl"
+    )
+
     model = joblib.load(model_path)
 
     prediction = model.predict(features)[0]
@@ -203,14 +273,28 @@ def get_live_prediction():
         "age_hours": freshness["age_hours"]
     }
 
+
 if __name__ == "__main__":
     result = get_live_prediction()
 
     print("Status:", result["status"])
-    print("Latest PM2.5 date:", result["latest_pm25_date"])
-    print("Data age:", round(result["age_hours"], 1), "hours")
+    print(
+        "Latest PM2.5 date:",
+        result["latest_pm25_date"]
+    )
+    print(
+        "Data age:",
+        round(result["age_hours"], 1),
+        "hours"
+    )
 
     if result["prediction"] is not None:
-        print("Tomorrow's predicted PM2.5:", round(result["prediction"], 1))
+        print(
+            "Tomorrow's predicted PM2.5:",
+            round(result["prediction"], 1)
+        )
     else:
-        print("Live forecast not shown because PM2.5 data is too old.")
+        print(
+            "Live forecast not shown because "
+            "PM2.5 data is too old."
+        )
