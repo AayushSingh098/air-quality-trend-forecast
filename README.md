@@ -14,9 +14,9 @@ The project integrates multiple real-world data sources, compares several machin
 
 ## 📊 Dashboard Preview
 
-![Main Dashboard](assets_dashboard.png)
+![Main Dashboard](assets/dashboard.png)
 
-![Analytics Dashboard](assets_analytics.png)
+![Analytics Dashboard](assets/analytics.png)
 ---
 
 ## 🎯 Project Objective
